@@ -5,6 +5,7 @@ Commands are sent to mpv through an IPC socket configured in mpv.conf (see input
 '''
 
 import argparse
+import os
 import socket
 import sys
 from time import time
@@ -35,11 +36,13 @@ IRCODE_COMMANDS = {
 
 
 def send_mpv_command(command):
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.connect(SOCKET_PATH)
-    client.sendall(command.encode())
-    client.close()
-
+    try:
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.connect(os.path.expanduser(SOCKET_PATH))
+        client.sendall(command.encode() + b'\n')
+        client.close()
+    except FileNotFoundError:
+        print('Failed to send command to non-existent socket')
 
 def main():
     parser = argparse.ArgumentParser()
