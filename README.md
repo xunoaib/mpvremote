@@ -36,7 +36,7 @@ a complete list of available mpv commands.
 3. Install the [Arduino-IRremote](https://github.com/Arduino-IRremote/Arduino-IRremote) library in the Arduino IDE
 4. Flash the `receiver.ino` sketch to your Arduino
 5. Install the [pyserial](https://github.com/pyserial/pyserial) Python library (`pip3 install pyserial`)
-6. Enable IPC support in mpv by adding `input-ipc-server=~~/socket` to `~/.config/mpv/socket`
+6. Enable IPC support in mpv by adding `input-ipc-server=~~/socket` to `~/.config/mpv/config`
 7. Run `python3 controller.py [port]`, replacing `[port]` with the port/path of your Arduino device (default: `/dev/ttyUSB0`). Run with `-h` for more options
 8. Press buttons on your IR remote to see their codes, then add them to the `IRCODE_COMMANDS` table in `controller.py`
 9. Restart the program and enjoy remote mpv control!
