@@ -35,10 +35,10 @@ IRCODE_COMMANDS = {
 }
 
 
-def send_mpv_command(command):
+def send_mpv_command(command, socket_path):
     try:
         client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        client.connect(os.path.expanduser(SOCKET_PATH))
+        client.connect(os.path.expanduser(socket_path))
         client.sendall(command.encode() + b'\n')
         client.close()
     except FileNotFoundError:
@@ -47,14 +47,19 @@ def send_mpv_command(command):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('port', nargs='?', default='/dev/ttyUSB0',
-                        help='Arduino device path or port name')
+                        help='Arduino device path or port name (default: /dev/ttyUSB0)')
     parser.add_argument('baud', nargs='?', type=int, default=9600,
-                        help='Arduino serial baud rate')
+                        help='Arduino serial baud rate (default: 9600)')
     parser.add_argument('-r', '--repeat-code', nargs='?', type=str, default='0',
-                        help='Convert this code to the last received code, like a "repeat" signal')
+                        help='Convert this code to the last received code, like a "repeat" signal (default: 0)')
     parser.add_argument('-c', '--cooldown', type=float, default=.2,
-                        help='Cooldown between executing duplicate commands')
+                        help='Cooldown between executing duplicate commands (default: .2)')
+    parser.add_argument('-s','--socket', default=SOCKET_PATH,
+                        help=f'Path to mpv socket (default: {SOCKET_PATH})')
     args = parser.parse_args()
+
+    if not os.path.exists(os.path.expanduser(args.socket)):
+        print("Warning: missing mpv socket:", args.socket)
 
     com = serial.Serial(args.port, args.baud)
     print('Connected. Waiting for IR codes...')
@@ -73,7 +78,7 @@ def main():
 
         if command := IRCODE_COMMANDS.get(code):
             print(code, command)
-            send_mpv_command(command)
+            send_mpv_command(command, args.socket)
             last_time = time()
         else:
             print(code)
