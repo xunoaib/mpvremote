@@ -11,8 +11,11 @@ import sys
 from time import time
 
 import serial
+from dotenv import load_dotenv
 
-SOCKET_PATH = '~/.config/mpv/socket'
+load_dotenv()
+
+MPV_SOCKET = os.getenv('MPV_SOCKET_PATH', '~/.config/mpv/socket')
 
 IRCODE_COMMANDS = {
     '49d32': 'set pause no; set speed 1; set mute no',  # play
@@ -35,27 +38,44 @@ IRCODE_COMMANDS = {
 }
 
 
-def send_mpv_command(command, socket_path):
-    try:
-        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        client.connect(os.path.expanduser(socket_path))
-        client.sendall(command.encode() + b'\n')
-        client.close()
-    except FileNotFoundError:
-        print('Failed to send command to non-existent socket')
+def send_mpv_command(command, socket_path=MPV_SOCKET):
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.connect(os.path.expanduser(socket_path))
+    client.sendall(command.encode() + b'\n')
+    client.close()
 
-def main():
+
+def _main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('port', nargs='?', default='/dev/ttyUSB0',
-                        help='Arduino device path or port name (default: /dev/ttyUSB0)')
-    parser.add_argument('baud', nargs='?', type=int, default=9600,
+    parser.add_argument(
+        'port',
+        nargs='?',
+        default='/dev/ttyUSB0',
+        help='Arduino device path or port name (default: /dev/ttyUSB0)')
+    parser.add_argument('baud',
+                        nargs='?',
+                        type=int,
+                        default=9600,
                         help='Arduino serial baud rate (default: 9600)')
-    parser.add_argument('-r', '--repeat-code', nargs='?', type=str, default='0',
-                        help='Convert this code to the last received code, like a "repeat" signal (default: 0)')
-    parser.add_argument('-c', '--cooldown', type=float, default=.2,
-                        help='Cooldown between executing duplicate commands (default: .2)')
-    parser.add_argument('-s','--socket', default=SOCKET_PATH,
-                        help=f'Path to mpv socket (default: {SOCKET_PATH})')
+    parser.add_argument(
+        '-r',
+        '--repeat-code',
+        nargs='?',
+        type=str,
+        default='0',
+        help=
+        'Convert this code to the last received code, like a "repeat" signal (default: 0)'
+    )
+    parser.add_argument(
+        '-c',
+        '--cooldown',
+        type=float,
+        default=.2,
+        help='Cooldown between executing duplicate commands (default: .2)')
+    parser.add_argument('-s',
+                        '--socket',
+                        default=MPV_SOCKET,
+                        help=f'Path to mpv socket (default: {MPV_SOCKET})')
     args = parser.parse_args()
 
     if not os.path.exists(os.path.expanduser(args.socket)):
@@ -64,7 +84,7 @@ def main():
     com = serial.Serial(args.port, args.baud)
     print('Connected. Waiting for IR codes...')
 
-    last_code = None
+    last_code = ''
     last_time = time()
 
     while True:
@@ -75,21 +95,27 @@ def main():
             code = last_code
             if time() - last_time < args.cooldown:
                 continue
+        last_code = code
 
         if command := IRCODE_COMMANDS.get(code):
             print(code, command)
-            send_mpv_command(command, args.socket)
+            try:
+                send_mpv_command(command, args.socket)
+            except FileNotFoundError:
+                print('Failed to send command to non-existent socket')
             last_time = time()
         else:
             print(code)
 
-        last_code = code
 
-
-if __name__ == '__main__':
+def main():
     try:
-        main()
+        _main()
     except KeyboardInterrupt:
         pass
     except serial.SerialException as exc:
         print(exc, file=sys.stderr)
+
+
+if __name__ == '__main__':
+    main()
