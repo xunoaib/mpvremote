@@ -1,5 +1,6 @@
 import ast
 import asyncio
+import copy
 import glob
 import json
 import logging
@@ -16,15 +17,20 @@ from Levenshtein import distance
 
 load_dotenv()
 
-OMDB_APIKEY = os.getenv('OMDB_APIKEY')
+OMDB_APIKEY = os.environ['OMDB_APIKEY']
 GLOB_MOVIE_FNAMES = os.environ['GLOB_MOVIE_FNAMES']
-CACHE_DIR = Path(os.getenv('MPVREMOTE_CACHE_DIR', 'cache'))
+CACHE_DIR = Path(os.getenv('MPVREMOTE_CACHE_DIR',
+                           '~/.cache/mpvremote')).expanduser()
 SEARCH_CACHE_FILE = CACHE_DIR / 'search-cache.json'
 MAIN_CACHE_FILE = CACHE_DIR / 'main-cache.json'
 POSTER_DIR = CACHE_DIR / 'posters'
 
 logging.info(f'Using {CACHE_DIR=}')
 logging.info(f'Using {GLOB_MOVIE_FNAMES=}')
+
+
+class ApiException(Exception):
+    pass
 
 
 def retrieve_metadata(movie_path_glob=GLOB_MOVIE_FNAMES,
@@ -45,7 +51,7 @@ def retrieve_metadata(movie_path_glob=GLOB_MOVIE_FNAMES,
                           cachefile=SEARCH_CACHE_FILE,
                           offline=offline)
 
-    found, notfound = search.find_movie_matches_multi(movie_paths)
+    found, notfound = search.find_best_movie_matches(movie_paths)
     if notfound:
         print("Some movies were not found:")
         for path in notfound:
@@ -59,27 +65,21 @@ def retrieve_metadata(movie_path_glob=GLOB_MOVIE_FNAMES,
     }
     posterdl.download_posters(urls)
 
-    # # associate movie paths with their posters
-    # movie2poster = {
-    #     path: movie['Poster'] if movie['Poster'].startswith('http') else None
-    #     for path, movie in found.items()
-    # }
-
     # create a list of local movie files, titles, years, and posters
-    data = {}
+    movies = {}
     seen = {}
-    for path, metadata in found.items():
-        if metadata['Poster'].startswith('http'):
-            poster = str(metadata['Poster'])
+    for path, movie in found.items():
+        if movie['Poster'].startswith('http'):
+            poster = str(movie['Poster'])
         else:
             poster = ''
-        data[str(path)] = {
-            'title': metadata['Title'],
-            'year': metadata['Year'],
+        movies[str(path)] = {
+            'title': movie['Title'],
+            'year': movie['Year'],
             'path': str(path),
             'poster': poster,
         }
-        key = (metadata['Title'], metadata['Year'])
+        key = (movie['Title'], movie['Year'])
         seen[key] = seen.get(key, []) + [path]
 
     dupes = Counter({k: len(v) for k, v in seen.items() if len(v) > 1})
@@ -91,11 +91,11 @@ def retrieve_metadata(movie_path_glob=GLOB_MOVIE_FNAMES,
                 print(f'    {path}')
 
     def sorter(args):
-        _, metadata = args
+        _, movie = args
         return re.sub(r'^(the|a|an) \s*', '',
-                      metadata['title'].lower()), metadata['year']
+                      movie['title'].lower()), movie['year']
 
-    sorted_data = dict(sorted(data.items(), key=sorter))
+    sorted_data = dict(sorted(movies.items(), key=sorter))
 
     if write_data_cache:
         with open(MAIN_CACHE_FILE, 'w') as f:
@@ -152,7 +152,10 @@ class SearchClient(BaseSearchClient):
         key = tuple(sorted(kwargs.items()))
         if key not in self.cache:
             if self.offline:
-                raise ValueError('OMDB client is in offline mode')
+                msg = ', '.join(f'{k}="{v}"' for k, v in kwargs.items())
+                raise ApiException(
+                    f'API client is in offline mode. SearchClient requested: {msg}'
+                )
             print('Searching', kwargs)
             self.cache[key] = super().request(**kwargs)
             self.save()
@@ -185,12 +188,31 @@ class SearchClient(BaseSearchClient):
                 (score_title, score_time, len(ranked_results), details))
         return [r[-1] for r in sorted(ranked_results)]
 
-    def find_movie_matches_multi(self, paths: list[Path]):
+    def find_best_movie_match(self, path: Path, fix_posters=True):
+        '''
+        Finds the single best movie match and optionally attempts to find a
+        fallback movie poster if one is missing.
+
+        WARN: IndexError if no matches are found
+        '''
+        matches = self.find_movie_matches(path)
+        final = copy.deepcopy(matches[0])
+        if final['Poster'] == 'N/A' and fix_posters:
+            for match in matches:
+                if match['Poster'] != 'N/A':
+                    final['Poster'] = match['Poster']
+                    break
+        return final
+
+    def find_best_movie_matches(self, paths: list[Path], fix_posters=True):
+        '''
+        Finds the best movie matches for each file path.
+        '''
         found = {}
         notfound = []
         for path in sorted(paths, key=path_to_title):
-            if ranked_results := self.find_movie_matches(path):
-                found[path] = ranked_results[0]
+            if result := self.find_best_movie_match(path, fix_posters):
+                found[path] = copy.deepcopy(result)
             else:
                 notfound.append(path)
         return found, notfound
@@ -208,7 +230,9 @@ class PosterDownloader:
             return path.name
 
         if self.offline:
-            raise ValueError('Client is in offline mode')
+            raise ApiException(
+                f'API client is in offline mode. PosterDownloader requested: {url}'
+            )
 
         async with session.get(url) as response:
             if response.status == 200:
@@ -234,7 +258,3 @@ class PosterDownloader:
         except RuntimeError:
             loop = asyncio.new_event_loop()  # avoid this
         return loop.run_until_complete(self._download_urls(poster_urls))
-
-
-if __name__ == '__main__':
-    retrieve_metadata()

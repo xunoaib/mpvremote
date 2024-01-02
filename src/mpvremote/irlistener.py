@@ -6,16 +6,12 @@ Commands are sent to mpv through an IPC socket configured in mpv.conf (see input
 
 import argparse
 import os
-import socket
 import sys
 from time import time
 
 import serial
-from dotenv import load_dotenv
 
-load_dotenv()
-
-MPV_SOCKET = os.getenv('MPV_SOCKET_PATH', '~/.config/mpv/socket')
+from . import mpv
 
 IRCODE_COMMANDS = {
     '49d32': 'set pause no; set speed 1; set mute no',  # play
@@ -38,19 +34,10 @@ IRCODE_COMMANDS = {
 }
 
 
-def send_mpv_command(command, socket_path=MPV_SOCKET):
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.connect(os.path.expanduser(socket_path))
-    client.sendall(command.encode() + b'\n')
-    client.close()
-
-
 def _main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'port',
-        nargs='?',
-        default='/dev/ttyUSB0',
         help='Arduino device path or port name (default: /dev/ttyUSB0)')
     parser.add_argument('baud',
                         nargs='?',
@@ -74,8 +61,8 @@ def _main():
         help='Cooldown between executing duplicate commands (default: .2)')
     parser.add_argument('-s',
                         '--socket',
-                        default=MPV_SOCKET,
-                        help=f'Path to mpv socket (default: {MPV_SOCKET})')
+                        default=mpv.MPV_SOCKET,
+                        help=f'Path to mpv socket (default: {mpv.MPV_SOCKET})')
     args = parser.parse_args()
 
     if not os.path.exists(os.path.expanduser(args.socket)):
@@ -100,7 +87,7 @@ def _main():
         if command := IRCODE_COMMANDS.get(code):
             print(code, command)
             try:
-                send_mpv_command(command, args.socket)
+                mpv.send_mpv_command(command, args.socket)
             except FileNotFoundError:
                 print('Failed to send command to non-existent socket')
             last_time = time()

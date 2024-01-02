@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpvremote"
+version = "0.0.1"
+dependencies = [
+    "Flask",
+    "Levenshtein",
+    "aiohttp",
+    "gunicorn",
+    "mpvremote",
+    "opencv-python",
+    "pyserial",
+    "python-dotenv",
+    "requests",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+[project.scripts]
+mpvremote-web-debug = "mpvremote.web:serve_debug"
+mpvremote-web = "mpvremote.web:serve_prod"
+mpvremote = "mpvremote.irlistener:main"
