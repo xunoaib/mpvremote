@@ -6,12 +6,21 @@ Commands are sent to mpv through an IPC socket configured in mpv.conf (see input
 
 import argparse
 import os
+import socket
 import sys
 from time import time
 
 import serial
 
-from . import mpv
+MPV_SOCKET = os.getenv('MPV_SOCKET_PATH', '~/.config/mpv/socket')
+
+
+def send_mpv_command(command, socket_path=MPV_SOCKET):
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.connect(os.path.expanduser(socket_path))
+    client.sendall(command.encode() + b'\n')
+    client.close()
+
 
 IRCODE_COMMANDS = {
     '49d32': 'set pause no; set speed 1; set mute no',  # play
@@ -61,8 +70,8 @@ def _main():
         help='Cooldown between executing duplicate commands (default: .2)')
     parser.add_argument('-s',
                         '--socket',
-                        default=mpv.MPV_SOCKET,
-                        help=f'Path to mpv socket (default: {mpv.MPV_SOCKET})')
+                        default=MPV_SOCKET,
+                        help=f'Path to mpv socket (default: {MPV_SOCKET})')
     args = parser.parse_args()
 
     if not os.path.exists(os.path.expanduser(args.socket)):
@@ -87,7 +96,7 @@ def _main():
         if command := IRCODE_COMMANDS.get(code):
             print(code, command)
             try:
-                mpv.send_mpv_command(command, args.socket)
+                send_mpv_command(command, args.socket)
             except FileNotFoundError:
                 print('Failed to send command to non-existent socket')
             last_time = time()
@@ -97,12 +106,13 @@ def _main():
 
 def main():
     try:
-        _main()
+        return _main()
     except KeyboardInterrupt:
         pass
     except serial.SerialException as exc:
         print(exc, file=sys.stderr)
+    return 1
 
 
 if __name__ == '__main__':
-    main()
+    exit(main())
