@@ -1,52 +1,21 @@
 #!/usr/bin/env python3
-'''
-Executes mpv commands based on IR codes read from an Arduino.
-Commands are sent to mpv through an IPC socket configured in mpv.conf (see input-ipc-server).
-'''
-
 import argparse
 import os
-import socket
 import sys
 from time import time
 
 import serial
 
-MPV_SOCKET = os.getenv('MPV_SOCKET_PATH', '~/.config/mpv/socket')
-
-
-def send_mpv_command(command, socket_path=MPV_SOCKET):
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.connect(os.path.expanduser(socket_path))
-    client.sendall(command.encode() + b'\n')
-    client.close()
-
-
-IRCODE_COMMANDS = {
-    '49d32': 'set pause no; set speed 1; set mute no',  # play
-    '49d39': 'set pause yes; set speed 1',  # pause
-    '49d23': 'multiply speed 2; set pause no; set mute yes',  # ff
-    '49d22': 'set speed 1; seek -5',  # rewind
-    '49d30': 'add chapter -1',  # |<< (prev chapter)
-    '49d31': 'add chapter 1',  # >>| (next chapter)
-    '49d5c': 'seek -1',  # step left
-    '62d14': 'seek 1',  # step right
-    '49d63': 'cycle sub',  # subtitle
-    '49d0b': 'show-progress',  # enter button
-    '49d38': 'quit-watch-later',  # stop
-    '49d7b': 'seek -5',  # left
-    '49d7c': 'seek 5',  # right
-    '49d7a': 'seek -60',  # down
-    '49d79': 'seek 60',  # up
-    '92': 'add volume 2',  # volume up
-    '93': 'add volume -2',  # volume down
-}
+from .classes import MPV_SOCKET
+from .config import MyController
 
 
 def _main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'port',
+        nargs='?',
+        default='/dev/ttyUSB0',
         help='Arduino device path or port name (default: /dev/ttyUSB0)')
     parser.add_argument('baud',
                         nargs='?',
@@ -80,11 +49,13 @@ def _main():
     com = serial.Serial(args.port, args.baud)
     print('Connected. Waiting for IR codes...')
 
-    last_code = ''
+    last_code = -1
     last_time = time()
 
+    controller = MyController(args.socket)
+
     while True:
-        code = com.readline().decode().strip().lower()
+        code = int(com.readline().decode().strip().lower(), 16)
 
         # detect repeated codes and enforce a cooldown
         if code in (last_code, args.repeat_code):
@@ -93,15 +64,22 @@ def _main():
                 continue
         last_code = code
 
-        if command := IRCODE_COMMANDS.get(code):
-            print(code, command)
-            try:
-                send_mpv_command(command, args.socket)
-            except FileNotFoundError:
-                print('Failed to send command to non-existent socket')
-            last_time = time()
+        if button := controller.code_to_button(code):
+            if action := controller.button_to_action(button):
+                handler, func, desc = action
+                print(
+                    f'{code:#x} {button} -- {handler.__class__.__name__}: "{desc}"'
+                )
+                try:
+                    func()
+                    last_time = time()
+                except (ConnectionRefusedError, FileNotFoundError) as exc:
+                    print(f'\033[91m{exc}\033[0m')
+            else:
+                print(
+                    f'{code:#x} {button} -- No action associated with button')
         else:
-            print(code)
+            print(f'{code:#x} -- No button associated with code')
 
 
 def main():

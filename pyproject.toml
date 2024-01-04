@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "mpvremote"
 version = "0.0.1"
 dependencies = [
-    "pyserial"
+    "pyserial",
+    "pyautogui", # only used in the example config.py
 ]
 
 [tool.setuptools.packages.find]
@@ -14,4 +15,4 @@ where = ["src"]
 namespaces = false
 
 [project.scripts]
-mpvremote = "mpvremote.controller:main"
+mpvremote = "mpvremote.cli:main"
