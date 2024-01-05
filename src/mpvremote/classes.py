@@ -9,24 +9,29 @@ Button = Enum('Button', [
     'play', 'pause', 'stop', 'rewind', 'forward', 'mute', 'volup', 'voldown',
     'info', 'option', 'back', 'cancel', 'home', 'subtitle', 'power',
     'channelup', 'channeldown', 'menu', 'setup', 'chapternext',
-    'chapterprevious', 'navup', 'navright', 'navdown', 'navleft', 'enter',
-    'stepleft', 'stepright'
+    'chapterprevious', 'up', 'right', 'down', 'left', 'enter', 'stepleft',
+    'stepright', 'num1', 'num2', 'num3', 'num4', 'num5', 'num6', 'num7',
+    'num8', 'num9', 'num0', 'topmenu', 'Return', 'display', 'zoom', 'slowplay',
+    'fastplay', 'sur', 'audio', 'angle', 'openclose', 'tvpower'
 ])
 
 
 class BaseMapping:
     '''Associates IR codes with named Buttons'''
 
-    codes: dict[int, Button | None] = {}
+    codes: dict[int, Button | None]
 
     def get(self, code: int):
         return self.codes.get(code)
+
+    def __contains__(self, code: int):
+        return code in self.codes
 
 
 class BaseHandler:
     '''Associates named Buttons with executable functions and descriptions'''
 
-    funcs: dict[Button, tuple[Callable, str]] = {}
+    funcs: dict[Button, tuple[Callable, str]]
 
     def get(self, button: Button):
         return self.funcs.get(button)
@@ -37,10 +42,8 @@ class BaseHandler:
 
 class BaseController:
     '''
-    Primary base class which should be used to define mappings between IR codes
-    and Button names, and associate those Button names with a list of action
-    handlers. Handlers are queried in order until one or none report being able
-    to handle a given event.
+    Primary base class composed of mappings and handlers. Each are queried in
+    order until one or none report being able to handle a given event.
     '''
 
     mappings: list[BaseMapping]
@@ -65,13 +68,12 @@ class BaseController:
                 return handler, *func_desc
 
     def code_to_action(self, code: int):
-        '''Combines code_to_button and button_to_action.'''
-
+        '''Converts code -> '''
         if button := self.code_to_button(code):
             return button, self.button_to_action(button)
 
 
-def send_mpv_command(command, socket_path=MPV_SOCKET):
+def send_mpv_command(command: str, socket_path=MPV_SOCKET):
     '''
     Sends an mpv command to an IPC socket. Raises an exception if the socket
     doesn't exist or rejects the connection.
@@ -87,10 +89,8 @@ def send_mpv_command(command, socket_path=MPV_SOCKET):
             f'{exc}. Failed to execute mpv command: "{command}"') from exc
 
 
-def mpv_command_func(command: str, socket_path: str) -> Callable:
-    '''Returns a function which executes the given mpv command'''
-
-    return lambda: send_mpv_command(command, socket_path=socket_path)
+def mpv_command_to_func(command: str, socket_path):
+    return lambda: send_mpv_command(command, socket_path)
 
 
 class MpvHandler(BaseHandler):
@@ -102,6 +102,6 @@ class MpvHandler(BaseHandler):
 
     def __init__(self, commands: dict[Button, str], socket_path: str):
         self.funcs = {
-            button: (mpv_command_func(command, socket_path), command)
+            button: (mpv_command_to_func(command, socket_path), command)
             for button, command in commands.items()
         }

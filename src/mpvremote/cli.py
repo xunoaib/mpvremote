@@ -43,6 +43,9 @@ def _main():
                         help=f'Path to mpv socket (default: {MPV_SOCKET})')
     args = parser.parse_args()
 
+    base = 16 if args.repeat_code.startswith('0x') else 10
+    repeat_code = int(args.repeat_code, base)
+
     if not os.path.exists(os.path.expanduser(args.socket)):
         print("Warning: missing mpv socket:", args.socket)
 
@@ -55,10 +58,11 @@ def _main():
     controller = MyController(args.socket)
 
     while True:
-        code = int(com.readline().decode().strip().lower(), 16)
+        line = com.readline().decode().strip().lower()
+        code = int(line, 16)
 
         # detect repeated codes and enforce a cooldown
-        if code in (last_code, args.repeat_code):
+        if code in (last_code, repeat_code):
             code = last_code
             if time() - last_time < args.cooldown:
                 continue

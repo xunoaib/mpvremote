@@ -50,6 +50,15 @@ The general configuration process is as follows:
 - Define handlers which associate these buttons with actions (see `MyMpvHandler`, `MyWebHandler`, and `BaseHandler`)
 - Combine them into a single integrated controller which can be used in `cli.py` (see `MyController` and `BaseController`)
 
+### Autostart
+
+A systemd service file is provided for convenience and can be used to autostart
+the web server:
+
+- Copy `mpvremote.service` into `~/.config/systemd/user/` and modify as needed (i.e.: to pass custom options to mpvremote)
+- Run `systemctl --user daemon-reload`
+- Run `systemctl --user enable --now mpvremote` to enable autostart and immediately start the service
+
 ## Notes
 
 You can also specify a list of mappings and/or handlers in a controller which

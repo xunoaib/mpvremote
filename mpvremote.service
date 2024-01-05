@@ -1,0 +1,10 @@
+[Unit]
+Description=mpvremote
+
+[Service]
+ExecStart=mpvremote
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

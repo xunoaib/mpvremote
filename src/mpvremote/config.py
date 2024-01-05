@@ -18,12 +18,13 @@ class MyMapping(BaseMapping):
         0x2a3b5140: Button.option,
         0x63022140: Button.back,
         0xb001f140: Button.enter,
-        0x9001d140: Button.navleft,
-        0xa001e140: Button.navright,
-        0x8001c140: Button.navdown,
-        0xf001b140: Button.navup,
+        0x9001d140: Button.left,
+        0xa001e140: Button.right,
+        0x8001c140: Button.down,
+        0xf001b140: Button.up,
         0x56170140: Button.volup,
         0x46171140: Button.voldown,
+        0x76172140: Button.mute,
     }
 
 
@@ -32,10 +33,12 @@ class MyMpvHandler(MpvHandler):
 
     def __init__(self, socket_path):
         commands = {
-            Button.play: 'set pause no; set speed 1; set mute no',
-            Button.pause: 'set pause yes; set speed 1',
-            Button.forward: 'multiply speed 2; set pause no; set mute yes',
-            Button.rewind: 'set speed 1; seek -5',
+            Button.play:
+            'set pause no; set speed 1; set mute no; show-text "Play"',
+            Button.pause: 'set pause yes; set speed 1; show-text "Pause"',
+            Button.forward:
+            'multiply speed 2; set pause no; set mute yes; show-text "Fast-forward"',
+            Button.rewind: 'set speed 1; seek -5; show-text "Rewind"',
             Button.chapterprevious: 'add chapter -1',
             Button.chapternext: 'add chapter 1',
             Button.stepleft: 'seek -1',
@@ -43,12 +46,13 @@ class MyMpvHandler(MpvHandler):
             Button.subtitle: 'cycle sub',
             Button.enter: 'show-progress',
             Button.stop: 'quit-watch-later',
-            Button.navleft: 'seek -5',
-            Button.navright: 'seek 5',
-            Button.navdown: 'seek -60',
-            Button.navup: 'seek 60',
+            Button.left: 'seek -5',
+            Button.right: 'seek 5',
+            Button.down: 'seek -60',
+            Button.up: 'seek 60',
             Button.volup: 'add volume 2',
             Button.voldown: 'add volume -2',
+            Button.mute: 'cycle mute',
         }
         super().__init__(commands, socket_path)
 
@@ -57,8 +61,8 @@ class MyWebHandler(BaseHandler):
     '''A custom handler which only performs actions when mpv is inactive'''
 
     funcs = {
-        Button.navleft: (lambda: press('left'), 'Press left arrow'),
-        Button.navright: (lambda: press('right'), 'Press right arrow'),
+        Button.left: (lambda: press('left'), 'Press left arrow'),
+        Button.right: (lambda: press('right'), 'Press right arrow'),
         Button.enter: (lambda: press('enter'), 'Press enter'),
     }
 
